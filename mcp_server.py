@@ -550,7 +550,7 @@ Summary:"""
         
         # Run the server
         if transport_type == "stdio":
-            from mcp.server.stdio import stdio_server
+            from mcp.server import stdio_server
             async with stdio_server() as (read_stream, write_stream):
                 await self.server.run(read_stream, write_stream)
         else:
