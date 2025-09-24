@@ -1,0 +1,18 @@
+# Core dependencies for MCP Server with Local LLM
+torch>=2.0.0
+transformers>=4.30.0
+accelerate>=0.20.0
+bitsandbytes>=0.41.0
+scipy>=1.10.0
+
+# MCP Protocol Implementation
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# Optional: For better performance
+flash-attn>=2.0.0  # Optional, only if compatible with your hardware
+
+# Development and utilities
+pytest>=7.0.0
+black>=23.0.0
+isort>=5.12.0
