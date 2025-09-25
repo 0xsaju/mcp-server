@@ -21,6 +21,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from mcp_server import MCPLocalLLMServer, LocalLLMManager
 from islamic_mcp_tools import IslamicMCPTools, IslamicContentGenerator, ISLAMIC_SYSTEM_PROMPT
+from deenmate_code_generator import DeenMateCodeGenerator, DEENMATE_TEMPLATES
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -34,6 +35,7 @@ class DeenMateMCPServer(MCPLocalLLMServer):
         super().__init__()
         self.islamic_tools = IslamicMCPTools()
         self.content_generator = IslamicContentGenerator()
+        self.code_generator = DeenMateCodeGenerator()
         self.setup_deenmate_handlers()
     
     def setup_deenmate_handlers(self):
@@ -125,6 +127,16 @@ class DeenMateMCPServer(MCPLocalLLMServer):
                 )
                 base_tools.append(tool)
             
+            # Add DeenMate code generation tools
+            code_tools = self.code_generator.get_deenmate_tools()
+            for tool_data in code_tools:
+                tool = Tool(
+                    name=tool_data["name"],
+                    description=tool_data["description"],
+                    inputSchema=tool_data["inputSchema"]
+                )
+                base_tools.append(tool)
+            
             return ListToolsResult(tools=base_tools)
         
         @self.server.call_tool()
@@ -151,6 +163,22 @@ class DeenMateMCPServer(MCPLocalLLMServer):
                 return await self._handle_halal_haram_guidance(arguments)
             elif tool_name == "ramadan_fasting_guide":
                 return await self._handle_ramadan_fasting_guide(arguments)
+            
+            # Handle DeenMate code generation tools
+            elif tool_name == "generate_flutter_feature":
+                return await self._handle_generate_flutter_feature(arguments)
+            elif tool_name == "generate_backend_api":
+                return await self._handle_generate_backend_api(arguments)
+            elif tool_name == "generate_web_component":
+                return await self._handle_generate_web_component(arguments)
+            elif tool_name == "generate_islamic_ui_components":
+                return await self._handle_generate_islamic_ui_components(arguments)
+            elif tool_name == "generate_database_schema":
+                return await self._handle_generate_database_schema(arguments)
+            elif tool_name == "generate_test_suite":
+                return await self._handle_generate_test_suite(arguments)
+            elif tool_name == "generate_documentation":
+                return await self._handle_generate_documentation(arguments)
             else:
                 # Handle base tools directly
                 if tool_name == "chat_with_llm":
