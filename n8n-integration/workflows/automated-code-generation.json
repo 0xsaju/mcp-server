@@ -1,0 +1,424 @@
+{
+  "name": "Automated Code Generation for DeenMate",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "generate-feature",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Feature Request Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "deenmate-feature-request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "feature-type-check",
+              "leftValue": "={{ $json.body.feature_type }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "isNotEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "validate-request",
+      "name": "Validate Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "platform-check",
+              "leftValue": "={{ $json.body.platform }}",
+              "rightValue": "flutter",
+              "operator": {
+                "type": "string",
+                "operation": "equal"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-platform",
+      "name": "Check Platform",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://your-mcp-server:8080/code/flutter",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "feature_name",
+              "value": "={{ $json.body.feature_name }}"
+            },
+            {
+              "name": "feature_type",
+              "value": "={{ $json.body.feature_type }}"
+            },
+            {
+              "name": "components",
+              "value": "={{ $json.body.components }}"
+            },
+            {
+              "name": "islamic_context",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-flutter",
+      "name": "Generate Flutter Code",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://your-mcp-server:8080/code/backend",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "api_name",
+              "value": "={{ $json.body.feature_name }}API"
+            },
+            {
+              "name": "api_type",
+              "value": "={{ $json.body.feature_type }}"
+            },
+            {
+              "name": "http_methods",
+              "value": ["GET", "POST", "PUT", "DELETE"]
+            },
+            {
+              "name": "include_auth",
+              "value": true
+            },
+            {
+              "name": "include_validation",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-backend",
+      "name": "Generate Backend API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://your-mcp-server:8080/code/web",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "component_name",
+              "value": "={{ $json.body.feature_name }}Component"
+            },
+            {
+              "name": "component_type",
+              "value": "={{ $json.body.feature_type }}"
+            },
+            {
+              "name": "styling",
+              "value": "tailwind"
+            },
+            {
+              "name": "interactive",
+              "value": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-web",
+      "name": "Generate Web Component",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "url": "http://your-mcp-server:8080/tools/call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool_name",
+              "value": "generate_test_suite"
+            },
+            {
+              "name": "arguments",
+              "value": {
+                "test_target": "full_feature",
+                "test_types": ["unit", "integration", "widget"],
+                "feature_name": "={{ $json.body.feature_name }}",
+                "include_mocks": true
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-tests",
+      "name": "Generate Test Suite",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.github.com/repos/{{ $env.GITHUB_REPO }}/issues",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "token {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "title",
+              "value": "🤖 Auto-generated: {{ $json.body.feature_name }} Implementation"
+            },
+            {
+              "name": "body",
+              "value": "## Auto-generated Code for {{ $json.body.feature_name }}\n\n### Flutter Code\n```dart\n{{ $('Generate Flutter Code').item.json.data.result }}\n```\n\n### Backend API\n```typescript\n{{ $('Generate Backend API').item.json.data.result }}\n```\n\n### Web Component\n```html\n{{ $('Generate Web Component').item.json.data.result }}\n```\n\n### Test Suite\n```dart\n{{ $('Generate Test Suite').item.json.data.result }}\n```\n\n---\n*Generated by DeenMate MCP AI Assistant*"
+            },
+            {
+              "name": "labels",
+              "value": ["auto-generated", "ai-assist", "{{ $json.body.feature_type }}"]
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-github-issue",
+      "name": "Create GitHub Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1340, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://hooks.slack.com/services/{{ $env.SLACK_WEBHOOK }}",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "🚀 *New Feature Code Generated*\n\n*Feature:* {{ $json.body.feature_name }}\n*Type:* {{ $json.body.feature_type }}\n*Platform:* {{ $json.body.platform }}\n\n*Components Generated:*\n• Flutter Widget/Screen\n• Backend API\n• Web Component\n• Test Suite\n\n*GitHub Issue:* {{ $('Create GitHub Issue').item.json.html_url }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "notify-team",
+      "name": "Notify Development Team",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1560, 300]
+    }
+  ],
+  "connections": {
+    "Feature Request Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Request": {
+      "main": [
+        [
+          {
+            "node": "Check Platform",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Platform": {
+      "main": [
+        [
+          {
+            "node": "Generate Flutter Code",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Backend API",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Generate Web Component",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Flutter Code": {
+      "main": [
+        [
+          {
+            "node": "Generate Test Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Backend API": {
+      "main": [
+        [
+          {
+            "node": "Generate Test Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Web Component": {
+      "main": [
+        [
+          {
+            "node": "Generate Test Suite",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Test Suite": {
+      "main": [
+        [
+          {
+            "node": "Create GitHub Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create GitHub Issue": {
+      "main": [
+        [
+          {
+            "node": "Notify Development Team",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 0,
+  "tags": [
+    {
+      "id": "code-generation",
+      "name": "Code Generation"
+    },
+    {
+      "id": "automation",
+      "name": "Automation"
+    }
+  ]
+}

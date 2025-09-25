@@ -1,0 +1,298 @@
+{
+  "name": "Prayer Time Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "check-schedule",
+      "name": "Check Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://your-deenmate-backend/api/users/active-notifications",
+        "options": {
+          "headers": {
+            "Authorization": "Bearer {{ $env.DEENMATE_API_TOKEN }}"
+          }
+        }
+      },
+      "id": "get-users",
+      "name": "Get Users with Notifications",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {},
+      "id": "loop-users",
+      "name": "Loop Users",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://your-mcp-server:8080/tools/call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "tool_name",
+              "value": "prayer_guidance"
+            },
+            {
+              "name": "arguments",
+              "value": {
+                "prayer_question": "What should I remember during {{ $json.next_prayer }}?",
+                "prayer_type": "{{ $json.next_prayer }}",
+                "situation": "{{ $json.user_location }}"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-prayer-guidance",
+      "name": "Get Prayer Guidance",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "time-check",
+              "leftValue": "={{ $json.minutes_until_prayer }}",
+              "rightValue": 15,
+              "operator": {
+                "type": "number",
+                "operation": "lte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-prayer-time",
+      "name": "Check if Prayer Time Soon",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1120, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://fcm.googleapis.com/fcm/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "key={{ $env.FCM_SERVER_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "to",
+              "value": "{{ $('Loop Users').item.json.fcm_token }}"
+            },
+            {
+              "name": "notification",
+              "value": {
+                "title": "🕌 {{ $('Loop Users').item.json.next_prayer }} Prayer Time",
+                "body": "{{ $('Loop Users').item.json.next_prayer }} prayer is in {{ $('Loop Users').item.json.minutes_until_prayer }} minutes",
+                "icon": "prayer_icon",
+                "sound": "adhan"
+              }
+            },
+            {
+              "name": "data",
+              "value": {
+                "prayer_name": "{{ $('Loop Users').item.json.next_prayer }}",
+                "prayer_time": "{{ $('Loop Users').item.json.prayer_time }}",
+                "guidance": "{{ $('Get Prayer Guidance').item.json.data.result }}",
+                "qibla_direction": "{{ $('Loop Users').item.json.qibla_direction }}"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "send-notification",
+      "name": "Send Prayer Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "url": "http://your-deenmate-backend/api/analytics/prayer-notifications",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.DEENMATE_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "user_id",
+              "value": "{{ $('Loop Users').item.json.user_id }}"
+            },
+            {
+              "name": "prayer_name",
+              "value": "{{ $('Loop Users').item.json.next_prayer }}"
+            },
+            {
+              "name": "notification_sent",
+              "value": true
+            },
+            {
+              "name": "timestamp",
+              "value": "{{ $now.toISOString() }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "log-analytics",
+      "name": "Log Analytics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1560, 200]
+    }
+  ],
+  "connections": {
+    "Check Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Users with Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Users with Notifications": {
+      "main": [
+        [
+          {
+            "node": "Loop Users",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Users": {
+      "main": [
+        [
+          {
+            "node": "Get Prayer Guidance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Prayer Guidance": {
+      "main": [
+        [
+          {
+            "node": "Check if Prayer Time Soon",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Prayer Time Soon": {
+      "main": [
+        [
+          {
+            "node": "Send Prayer Notification",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send Prayer Notification": {
+      "main": [
+        [
+          {
+            "node": "Log Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "createdAt": "2024-01-01T00:00:00.000Z",
+  "updatedAt": "2024-01-01T00:00:00.000Z",
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "1",
+  "triggerCount": 0,
+  "tags": [
+    {
+      "id": "islamic-automation",
+      "name": "Islamic Automation"
+    },
+    {
+      "id": "prayer-notifications",
+      "name": "Prayer Notifications"
+    }
+  ]
+}
