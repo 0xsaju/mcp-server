@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 # Import base MCP server
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from mcp_server import MCPLocalLLMServer, LocalLLMManager
 from islamic_mcp_tools import IslamicMCPTools, IslamicContentGenerator, ISLAMIC_SYSTEM_PROMPT
 
