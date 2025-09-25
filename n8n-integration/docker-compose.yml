@@ -25,6 +25,8 @@ services:
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=${WEBHOOK_URL:-http://localhost:5678}
       - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-deenmate_encryption_key_2024}
+      - N8N_SECURE_COOKIE=false
+      - N8N_DISABLE_UI=false
       - DB_TYPE=postgresdb
       - DB_POSTGRESDB_HOST=postgres
       - DB_POSTGRESDB_PORT=5432
