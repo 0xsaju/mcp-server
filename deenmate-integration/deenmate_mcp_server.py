@@ -42,14 +42,82 @@ class DeenMateMCPServer(MCPLocalLLMServer):
         @self.server.list_tools()
         async def handle_list_tools():
             """List all tools including Islamic ones"""
-            # Get base tools
-            base_result = await super(DeenMateMCPServer, self).server.tools_handler()
-            base_tools = base_result.tools
+            # Get base tools - import here to avoid circular imports
+            from mcp.types import Tool, ListToolsResult
+            
+            # Create base tools manually (since we're overriding)
+            base_tools = [
+                Tool(
+                    name="chat_with_llm",
+                    description="Chat with the local LLM model",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "message": {"type": "string", "description": "The message to send to the LLM"},
+                            "system_prompt": {"type": "string", "description": "Optional system prompt"},
+                            "temperature": {"type": "number", "description": "Temperature (0-1)", "default": 0.7},
+                            "max_tokens": {"type": "integer", "description": "Max tokens", "default": 512}
+                        },
+                        "required": ["message"]
+                    }
+                ),
+                Tool(
+                    name="analyze_code",
+                    description="Analyze code using the local LLM",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string", "description": "The code to analyze"},
+                            "language": {"type": "string", "description": "Programming language"},
+                            "analysis_type": {"type": "string", "description": "Type of analysis", "default": "review"}
+                        },
+                        "required": ["code"]
+                    }
+                ),
+                Tool(
+                    name="generate_text",
+                    description="Generate text content using the local LLM",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "prompt": {"type": "string", "description": "Prompt for generation"},
+                            "style": {"type": "string", "description": "Writing style", "default": "formal"},
+                            "length": {"type": "string", "description": "Length", "default": "medium"}
+                        },
+                        "required": ["prompt"]
+                    }
+                ),
+                Tool(
+                    name="translate_text",
+                    description="Translate text using the local LLM",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "text": {"type": "string", "description": "Text to translate"},
+                            "target_language": {"type": "string", "description": "Target language"},
+                            "source_language": {"type": "string", "description": "Source language"}
+                        },
+                        "required": ["text", "target_language"]
+                    }
+                ),
+                Tool(
+                    name="summarize_content",
+                    description="Summarize content using the local LLM",
+                    inputSchema={
+                        "type": "object",
+                        "properties": {
+                            "content": {"type": "string", "description": "Content to summarize"},
+                            "summary_type": {"type": "string", "description": "Summary type", "default": "brief"},
+                            "max_length": {"type": "integer", "description": "Max length", "default": 150}
+                        },
+                        "required": ["content"]
+                    }
+                )
+            ]
             
             # Add Islamic tools
             islamic_tools = self.islamic_tools.get_islamic_tools()
             for tool_data in islamic_tools:
-                from mcp.types import Tool
                 tool = Tool(
                     name=tool_data["name"],
                     description=tool_data["description"],
@@ -57,7 +125,6 @@ class DeenMateMCPServer(MCPLocalLLMServer):
                 )
                 base_tools.append(tool)
             
-            from mcp.types import ListToolsResult
             return ListToolsResult(tools=base_tools)
         
         @self.server.call_tool()
@@ -85,20 +152,54 @@ class DeenMateMCPServer(MCPLocalLLMServer):
             elif tool_name == "ramadan_fasting_guide":
                 return await self._handle_ramadan_fasting_guide(arguments)
             else:
-                # Fall back to base tools
-                return await super(DeenMateMCPServer, self).server.call_tool_handler(request)
+                # Handle base tools directly
+                if tool_name == "chat_with_llm":
+                    return await self._handle_chat_with_llm(arguments)
+                elif tool_name == "analyze_code":
+                    return await self._handle_analyze_code(arguments)
+                elif tool_name == "generate_text":
+                    return await self._handle_generate_text(arguments)
+                elif tool_name == "translate_text":
+                    return await self._handle_translate_text(arguments)
+                elif tool_name == "summarize_content":
+                    return await self._handle_summarize_content(arguments)
+                else:
+                    from mcp.types import CallToolResult, TextContent
+                    return CallToolResult(
+                        content=[TextContent(type="text", text=f"Unknown tool: {tool_name}")],
+                        isError=True
+                    )
         
         @self.server.list_resources()
         async def handle_list_resources():
             """List all resources including Islamic ones"""
-            # Get base resources
-            base_result = await super(DeenMateMCPServer, self).server.resources_handler()
-            base_resources = base_result.resources
+            # Create base resources manually
+            from mcp.types import Resource, ListResourcesResult
+            
+            base_resources = [
+                Resource(
+                    uri="llm://model/info",
+                    name="LLM Model Information",
+                    description="Information about the loaded local LLM model",
+                    mimeType="application/json"
+                ),
+                Resource(
+                    uri="llm://conversations/history",
+                    name="Conversation History",
+                    description="History of conversations with the LLM",
+                    mimeType="application/json"
+                ),
+                Resource(
+                    uri="llm://system/status",
+                    name="System Status",
+                    description="Current system status and resource usage",
+                    mimeType="application/json"
+                )
+            ]
             
             # Add Islamic resources
             islamic_resources = self.islamic_tools.get_islamic_resources()
             for resource_data in islamic_resources:
-                from mcp.types import Resource
                 resource = Resource(
                     uri=resource_data["uri"],
                     name=resource_data["name"],
@@ -107,7 +208,6 @@ class DeenMateMCPServer(MCPLocalLLMServer):
                 )
                 base_resources.append(resource)
             
-            from mcp.types import ListResourcesResult
             return ListResourcesResult(resources=base_resources)
         
         @self.server.read_resource()
@@ -184,8 +284,41 @@ class DeenMateMCPServer(MCPLocalLLMServer):
                 )
             
             else:
-                # Fall back to base resources
-                return await super(DeenMateMCPServer, self).server.read_resource_handler(request)
+                # Handle base resources
+                if uri == "llm://model/info":
+                    info = {
+                        "model_name": self.llm_manager.model_name,
+                        "device": str(self.llm_manager.device),
+                        "model_loaded": self.llm_manager.model is not None,
+                        "tokenizer_loaded": self.llm_manager.tokenizer is not None
+                    }
+                    from mcp.types import GetResourceResult, JSONContent
+                    return GetResourceResult(
+                        contents=[JSONContent(type="json", json=info)]
+                    )
+                
+                elif uri == "llm://conversations/history":
+                    from mcp.types import GetResourceResult, JSONContent
+                    return GetResourceResult(
+                        contents=[JSONContent(type="json", json=self.conversation_history)]
+                    )
+                
+                elif uri == "llm://system/status":
+                    import torch
+                    status = {
+                        "timestamp": datetime.now().isoformat(),
+                        "gpu_available": torch.cuda.is_available(),
+                        "gpu_count": torch.cuda.device_count() if torch.cuda.is_available() else 0,
+                        "memory_allocated": torch.cuda.memory_allocated() if torch.cuda.is_available() else 0,
+                        "memory_reserved": torch.cuda.memory_reserved() if torch.cuda.is_available() else 0
+                    }
+                    from mcp.types import GetResourceResult, JSONContent
+                    return GetResourceResult(
+                        contents=[JSONContent(type="json", json=status)]
+                    )
+                
+                else:
+                    raise ValueError(f"Unknown resource: {uri}")
     
     # Islamic tool handlers
     async def _handle_islamic_guidance(self, arguments: Dict[str, Any]):
@@ -343,26 +476,284 @@ Content Type: {content_type}
             content=[TextContent(type="text", text=response)]
         )
     
-    # Add other Islamic tool handlers...
+    # Base tool handlers (inherited from parent class methods)
+    async def _handle_chat_with_llm(self, arguments: Dict[str, Any]):
+        """Handle chat with LLM tool"""
+        message = arguments["message"]
+        system_prompt = arguments.get("system_prompt", ISLAMIC_SYSTEM_PROMPT)
+        temperature = arguments.get("temperature", 0.7)
+        max_tokens = arguments.get("max_tokens", 512)
+        
+        response = await self.llm_manager.generate_response(
+            prompt=message,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            system_prompt=system_prompt
+        )
+        
+        # Store conversation
+        conversation_id = f"chat_{len(self.conversation_history)}"
+        self.conversation_history[conversation_id] = {
+            "timestamp": datetime.now().isoformat(),
+            "user_message": message,
+            "system_prompt": system_prompt,
+            "llm_response": response,
+            "parameters": {"temperature": temperature, "max_tokens": max_tokens}
+        }
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
+    
+    async def _handle_analyze_code(self, arguments: Dict[str, Any]):
+        """Handle code analysis tool"""
+        code = arguments["code"]
+        language = arguments.get("language", "unknown")
+        analysis_type = arguments.get("analysis_type", "review")
+        
+        system_prompt = f"""You are an expert code reviewer and software engineer. 
+        Analyze the following {language} code and provide a {analysis_type}.
+        Be specific, constructive, and helpful in your analysis."""
+        
+        prompt = f"""Please {analysis_type} this {language} code:
+
+```{language}
+{code}
+```
+
+Provide detailed feedback including:
+1. Code quality and best practices
+2. Potential issues or bugs
+3. Performance considerations
+4. Suggestions for improvement
+"""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            max_tokens=1024,
+            temperature=0.3
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
+    
+    async def _handle_generate_text(self, arguments: Dict[str, Any]):
+        """Handle text generation tool"""
+        prompt = arguments["prompt"]
+        style = arguments.get("style", "formal")
+        length = arguments.get("length", "medium")
+        
+        length_tokens = {"short": 256, "medium": 512, "long": 1024}
+        
+        system_prompt = f"""You are a skilled writer. Generate text in a {style} style.
+        The response should be {length} in length. Be creative, engaging, and appropriate
+        for the requested style and length."""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            max_tokens=length_tokens.get(length, 512),
+            temperature=0.8
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
+    
+    async def _handle_translate_text(self, arguments: Dict[str, Any]):
+        """Handle text translation tool"""
+        text = arguments["text"]
+        target_language = arguments["target_language"]
+        source_language = arguments.get("source_language", "auto-detect")
+        
+        system_prompt = """You are a professional translator. Provide accurate, 
+        natural translations while preserving the original meaning, tone, and context."""
+        
+        if source_language == "auto-detect":
+            prompt = f"""Translate the following text to {target_language}:
+
+"{text}"
+
+Provide only the translation, maintaining the original tone and meaning."""
+        else:
+            prompt = f"""Translate the following {source_language} text to {target_language}:
+
+"{text}"
+
+Provide only the translation, maintaining the original tone and meaning."""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            max_tokens=512,
+            temperature=0.3
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
+    
+    async def _handle_summarize_content(self, arguments: Dict[str, Any]):
+        """Handle content summarization tool"""
+        content = arguments["content"]
+        summary_type = arguments.get("summary_type", "brief")
+        max_length = arguments.get("max_length", 150)
+        
+        system_prompt = """You are an expert at creating clear, concise summaries.
+        Focus on the key points and main ideas while maintaining accuracy."""
+        
+        format_instructions = {
+            "brief": "Provide a brief, one-paragraph summary",
+            "detailed": "Provide a detailed summary with multiple paragraphs covering all important points",
+            "bullet_points": "Provide a summary in bullet point format"
+        }
+        
+        prompt = f"""Summarize the following content in approximately {max_length} words.
+        {format_instructions.get(summary_type, "Provide a clear summary")}:
+
+{content}
+
+Summary:"""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=system_prompt,
+            max_tokens=max_length * 2,
+            temperature=0.5
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
+    
+    # Additional Islamic tool handlers
     async def _handle_hadith_guidance(self, arguments: Dict[str, Any]):
         """Handle Hadith guidance requests"""
-        # Implementation similar to above
-        pass
+        topic = arguments["topic"]
+        hadith_text = arguments.get("hadith_text", "")
+        collection = arguments.get("collection", "Any")
+        
+        prompt = f"""
+Topic: {topic}
+Hadith Text: {hadith_text}
+Preferred Collection: {collection}
+
+Please provide guidance based on authentic Hadith literature. Include:
+1. Relevant Hadith with proper attribution
+2. Explanation of the teaching
+3. Practical application in modern life
+4. Grade/authenticity if known
+"""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=ISLAMIC_SYSTEM_PROMPT,
+            max_tokens=800,
+            temperature=0.3
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
     
     async def _handle_prayer_guidance(self, arguments: Dict[str, Any]):
         """Handle prayer guidance requests"""
-        # Implementation similar to above  
-        pass
+        prayer_question = arguments["prayer_question"]
+        prayer_type = arguments.get("prayer_type", "General")
+        situation = arguments.get("situation", "")
+        
+        prompt = f"""
+Prayer Question: {prayer_question}
+Prayer Type: {prayer_type}
+Special Situation: {situation}
+
+Please provide guidance on prayer (Salah) based on Islamic jurisprudence. Include:
+1. Clear answer to the question
+2. Relevant Quranic verses or Hadith
+3. Different scholarly opinions if applicable
+4. Practical steps for implementation
+"""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=ISLAMIC_SYSTEM_PROMPT,
+            max_tokens=800,
+            temperature=0.3
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
     
     async def _handle_halal_haram_guidance(self, arguments: Dict[str, Any]):
         """Handle halal/haram guidance requests"""
-        # Implementation similar to above
-        pass
+        item_or_action = arguments["item_or_action"]
+        context = arguments.get("context", "")
+        evidence_level = arguments.get("evidence_level", "basic")
+        
+        prompt = f"""
+Item/Action: {item_or_action}
+Context: {context}
+Evidence Level: {evidence_level}
+
+Please provide Islamic ruling on the permissibility of this item/action. Include:
+1. Clear ruling (Halal, Haram, Makruh, Mustahab, etc.)
+2. Evidence from Quran and Sunnah
+3. Scholarly consensus or differences
+4. Practical implications and alternatives if needed
+"""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=ISLAMIC_SYSTEM_PROMPT,
+            max_tokens=800,
+            temperature=0.3
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
     
     async def _handle_ramadan_fasting_guide(self, arguments: Dict[str, Any]):
         """Handle Ramadan fasting guidance requests"""
-        # Implementation similar to above
-        pass
+        fasting_question = arguments["fasting_question"]
+        fasting_type = arguments.get("fasting_type", "Ramadan")
+        personal_situation = arguments.get("personal_situation", "")
+        
+        prompt = f"""
+Fasting Question: {fasting_question}
+Fasting Type: {fasting_type}
+Personal Situation: {personal_situation}
+
+Please provide comprehensive guidance on fasting based on Islamic teachings. Include:
+1. Answer to the specific question
+2. Relevant Quranic verses and Hadith
+3. Conditions and exemptions if applicable
+4. Make-up requirements if needed
+5. Spiritual benefits and recommendations
+"""
+        
+        response = await self.llm_manager.generate_response(
+            prompt=prompt,
+            system_prompt=ISLAMIC_SYSTEM_PROMPT,
+            max_tokens=1000,
+            temperature=0.3
+        )
+        
+        from mcp.types import CallToolResult, TextContent
+        return CallToolResult(
+            content=[TextContent(type="text", text=response)]
+        )
 
 
 async def main():
