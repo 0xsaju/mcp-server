@@ -21,7 +21,10 @@ import os
 # Add parent directory to path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from deenmate_integration.deenmate_mcp_server import DeenMateMCPServer
+# Import from the deenmate-integration directory
+sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'deenmate-integration'))
+
+from deenmate_mcp_server import DeenMateMCPServer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
